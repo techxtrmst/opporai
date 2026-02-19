@@ -1,0 +1,80 @@
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Prepare deployment package
+        run: |
+          # Copy static assets into standalone
+          cp -r .next/static .next/standalone/.next/static
+
+          # Copy public folder if it exists
+          if [ -d "public" ]; then
+            cp -r public .next/standalone/public
+          fi
+
+          # Copy app.js startup file into standalone root
+          cp app.js .next/standalone/app.js
+
+          # Create the deployment zip from standalone contents
+          cd .next/standalone
+          zip -r ../../deploy.zip .
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.DEPLOY_SSH_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload to server
+        run: |
+          scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_SSH_PORT }} \
+            deploy.zip \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/home/${{ secrets.DEPLOY_USER }}/deploy.zip
+
+      - name: Deploy on server
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} bash -s << 'EOF'
+          set -e
+          APP_DIR="/home/oppoexnp/opporaai"
+          DEPLOY_ZIP="/home/oppoexnp/deploy.zip"
+          echo ">>> Cleaning old deployment..."
+          cd "$APP_DIR"
+          find . -mindepth 1 -maxdepth 1 ! -name 'tmp' ! -name 'stderr.log' -exec rm -rf {} +
+          echo ">>> Extracting new deployment..."
+          unzip -o "$DEPLOY_ZIP" -d "$APP_DIR"
+          rm -f "$DEPLOY_ZIP"
+          mkdir -p "$APP_DIR/tmp"
+          echo ">>> Restarting application..."
+          touch "$APP_DIR/tmp/restart.txt"
+          echo ">>> Deployment complete!"
+          EOF
+
+      - name: Cleanup SSH
+        if: always()
+        run: rm -rf ~/.ssh/deploy_key
