@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "setup:secrets": "bash scripts/setup-secrets.sh"
+    "setup:secrets": "node scripts/setup-secrets.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
