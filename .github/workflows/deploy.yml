@@ -39,9 +39,9 @@ jobs:
           # Copy app.js startup file into standalone root
           cp app.js .next/standalone/app.js
 
-          # Create the deployment zip from standalone contents
+          # Create tarball (dereference symlinks for compatibility)
           cd .next/standalone
-          zip -r ../../deploy.zip .
+          tar czf ../../deploy.tar.gz --dereference .
 
       - name: Setup SSH
         run: |
@@ -53,8 +53,8 @@ jobs:
       - name: Upload to server
         run: |
           scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_SSH_PORT }} \
-            deploy.zip \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/home/${{ secrets.DEPLOY_USER }}/deploy.zip
+            deploy.tar.gz \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/home/${{ secrets.DEPLOY_USER }}/deploy.tar.gz
 
       - name: Deploy on server
         run: |
@@ -62,13 +62,13 @@ jobs:
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} bash -s << 'EOF'
           set -e
           APP_DIR="/home/oppoexnp/opporaai"
-          DEPLOY_ZIP="/home/oppoexnp/deploy.zip"
+          DEPLOY_TAR="/home/oppoexnp/deploy.tar.gz"
           echo ">>> Cleaning old deployment..."
           cd "$APP_DIR"
           find . -mindepth 1 -maxdepth 1 ! -name 'tmp' ! -name 'stderr.log' -exec rm -rf {} +
           echo ">>> Extracting new deployment..."
-          unzip -o "$DEPLOY_ZIP" -d "$APP_DIR"
-          rm -f "$DEPLOY_ZIP"
+          tar xzf "$DEPLOY_TAR" -C "$APP_DIR"
+          rm -f "$DEPLOY_TAR"
           mkdir -p "$APP_DIR/tmp"
           echo ">>> Restarting application..."
           touch "$APP_DIR/tmp/restart.txt"
