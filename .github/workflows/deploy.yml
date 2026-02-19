@@ -71,7 +71,7 @@ jobs:
           rm -f "$DEPLOY_TAR"
           mkdir -p "$APP_DIR/tmp"
           echo ">>> Restarting application..."
-          touch "$APP_DIR/tmp/restart.txt"
+          cloudlinux-selector restart --json --interpreter nodejs --app-root ~/opporaai
           echo ">>> Deployment complete!"
           EOF
 
